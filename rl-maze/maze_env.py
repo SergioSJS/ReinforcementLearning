@@ -6,8 +6,11 @@ if sys.version_info.major == 2:
     import Tkinter as tk
 else:
     import tkinter as tk
-
-UNIT = 40 # Pixels
+'''
+Based:
+https://github.com/MorvanZhou/Reinforcement-learning-with-tensorflow/blob/master/contents/2_Q_Learning_maze/maze_env.py
+'''
+UNIT = 100 # Pixels
 MAZE_H = 5 # Grid height
 MAZE_W = 5 # Grid width
 ACTION_SPACE = ['u','d','l','r']
@@ -16,13 +19,13 @@ EPISODES = 10
 class Maze(tk.Tk, object):
     def __init__(self):
         super(Maze, self).__init__()
+        self.actionSpace = ACTION_SPACE
         self.nActions = len(ACTION_SPACE)
         self.title('Maze')
         self.geometry('{0}x{1}'.format(MAZE_H * UNIT, MAZE_W * UNIT))
         self._buildMaze()       
 
     def _buildMaze(self):
-        print 3
         self.canvas = tk.Canvas(self, bg="white", height=MAZE_H*UNIT, width=MAZE_W*UNIT)
         
         #Create grids
@@ -34,32 +37,32 @@ class Maze(tk.Tk, object):
             self.canvas.create_line(x0, y0, x1, y1)
 
         # Origin agent
-        self.origin = np.array([20, 20])
+        self.origin = np.array([50, 50])
         self.agent = self.canvas.create_rectangle(
-            self.origin[0] - 15, self.origin[1] - 15,
-            self.origin[0] + 15, self.origin[1] + 15,
+            self.origin[0] - 40, self.origin[1] - 40,
+            self.origin[0] + 40, self.origin[1] + 40,
             fill='blue'
         )
 
         # Holes
         hole1Center = self.origin + np.array([UNIT*3, UNIT*2])
         self.hole1 = self.canvas.create_rectangle(
-            hole1Center[0] - 15, hole1Center[1] - 15,
-            hole1Center[0] + 15, hole1Center[1] + 15,
+            hole1Center[0] - 40, hole1Center[1] - 40,
+            hole1Center[0] + 40, hole1Center[1] + 40,
             fill='black'
         )
         hole2Center = self.origin + np.array([UNIT*2, UNIT*3])
         self.hole2 = self.canvas.create_rectangle(
-            hole2Center[0] - 15, hole2Center[1] - 15,
-            hole2Center[0] + 15, hole2Center[1] + 15,
+            hole2Center[0] - 40, hole2Center[1] - 40,
+            hole2Center[0] + 40, hole2Center[1] + 40,
             fill='black'
         )
 
         # Goal
         goalCenter = self.origin + UNIT*3
         self.goal = self.canvas.create_oval(
-            goalCenter[0] - 15, goalCenter[1] - 15,
-            goalCenter[0] + 15, goalCenter[1] + 15,
+            goalCenter[0] - 40, goalCenter[1] - 40,
+            goalCenter[0] + 40, goalCenter[1] + 40,
             fill='yellow'
         )
      
@@ -111,8 +114,8 @@ class Maze(tk.Tk, object):
         time.sleep(0.5)
         self.canvas.delete(self.agent)
         self.agent = self.canvas.create_rectangle(
-            self.origin[0] - 15, self.origin[1] - 15,
-            self.origin[0] + 15, self.origin[1] + 15,
+            self.origin[0] - 40, self.origin[1] - 40,
+            self.origin[0] + 40, self.origin[1] + 40,
             fill='blue'
         )
         return self.canvas.coords(self.agent)
