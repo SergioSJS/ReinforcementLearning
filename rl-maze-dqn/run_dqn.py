@@ -1,7 +1,7 @@
 import random
 
 from maze_env import Maze
-from rl_brain import DeepQNetworkKeras
+from rl_brain import DoubleDeepQNetworkKeras
 #reload(Maze)
 
 MAX_EPISODES = 10000
@@ -49,13 +49,14 @@ def update():
 if __name__ == '__main__':    
     env = Maze()
     actionSpace = env.actionSpace
-    RL = DeepQNetworkKeras(
+    RL = DoubleDeepQNetworkKeras(
         actionsList=actionSpace, nFeatures=env.nFeatures,
-        learningRate=0.01, 
+        learningRate=0.001, 
         rewardDecay=0.90, 
         eGreedy=0.90,
         replaceTargetIter=200,
         memorySize=2000,
-        batchSize=100)
+        batchSize=100,
+        tau=1)
     env.after(100, update)
     env.mainloop()

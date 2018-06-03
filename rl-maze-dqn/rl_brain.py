@@ -7,9 +7,10 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-from keras.models import Sequential
-from keras.layers import Dense
+from keras.models import Sequential, Model
+from keras.layers import Dense, merge, Input
 from keras.optimizers import Adam
+from keras import backend as K
 
 np.random.seed(7)
 tf.set_random_seed(7)
@@ -265,7 +266,6 @@ class DeepQNetwork():
         self.epsilon = self.epsilon + self.epsilon_increment if self.epsilon < self.epsilon_max else self.epsilon_max
         self.learn_step_counter += 1
 
-
 class DeepQNetworkKeras():
     def __init__(
         self, 
@@ -376,6 +376,163 @@ class DeepQNetworkKeras():
 
         # increasing epsilon
         self.epsilon = self.epsilon + self.epsilon_increment if self.epsilon < self.epsilon_max else self.epsilon_max
+
+
+    def plotCost(self):
+        pass
+
+class DoubleDeepQNetworkKeras():
+    def __init__(
+        self, 
+        actionsList,
+        nFeatures,
+        learningRate=0.01, 
+        rewardDecay=0.95, 
+        eGreedy=0.95, 
+        replaceTargetIter=300,
+        memorySize=500,
+        batchSize=32,
+        eGreedyIncrement=None,
+        outputGraph=False,
+        layer1Units=50,
+        layer2Units=100,
+        input_dim=2,
+        epochs=1, 
+        batch_size=20,
+        tau=0.001):
+        
+        self.actionsList = actionsList
+        self.nFeatures = nFeatures
+        self.lr = learningRate
+        self.gamma = rewardDecay
+        self.epsilon_max = eGreedy
+        self.replace_target_iter = replaceTargetIter
+        self.memory_size = memorySize
+        self.batch_size = batchSize
+        self.epsilon_increment = eGreedyIncrement
+        self.epsilon = 0 if eGreedyIncrement is not None else self.epsilon_max
+        self.layer1Units = layer1Units
+        self.layer2Units = layer2Units
+        self.input_dim = input_dim
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.tau = tau
+
+        # Total learning step
+        self.learn_step_counter = 0
+
+        # Initialize memory
+        self.memory = np.zeros((self.memory_size, 4), dtype='object')
+
+        # Initialize model
+        self.model = self._build_dual_net()
+        self.target_model = self._build_dual_net()
+        self.update_target_model(self.tau)
+       
+
+    def _build_net(self):
+        model = Sequential()
+        model.add(Dense(self.layer1Units, input_dim=self.input_dim, activation='relu'))
+        model.add(Dense(self.layer2Units, activation='relu'))
+        model.add(Dense(len(self.actionsList)))
+        adam = Adam(lr = self.lr)
+        model.compile(optimizer = adam, loss='mean_squared_error')
+        
+        return model
+
+    def _build_dual_net(self):
+        model = Sequential()
+        input_layer = Input(shape=(self.input_dim,))
+        
+        fc1 = Dense(self.layer1Units, activation='relu')(input_layer)
+        advantage = Dense(len(self.actionsList))(fc1)
+        
+        fc2 = Dense(self.layer1Units, activation='relu')(input_layer)
+        value = Dense(1)(fc2)
+
+        policy = merge([advantage, value], 
+            mode = lambda x: x[0] - K.mean(x[0])+x[1],
+            output_shape = (len(self.actionsList),)
+            )
+
+        model = Model(input=[input_layer], output=[policy])
+        adam = Adam(lr = self.lr)
+        model.compile(optimizer = adam, loss='mean_squared_error')
+        
+        return model
+
+    def update_target_model(self, tau):
+        if tau == 1:
+            self.target_model.set_weights(self.model.get_weights())
+        else:
+            main_weights = self.model.get_weights()
+            target_weights = self.target_model.get_weights()
+            for i, layer_weights in enumerate(main_weights):
+                target_weights[i] *= (1-tau)
+                target_weights[i] += tau * layer_weights
+            self.target_model.set_weights(target_weights)
+
+    def storeTransition(self, state, action, reward, state_):
+        if not hasattr(self, 'memory_counter'):
+            self.memory_counter = 0
+        
+        transition = (state.T, action, reward, state_.T)
+        #replace the old memory with new memory
+        index = self.memory_counter % self.memory_size
+        self.memory[index, :] = transition
+
+        self.memory_counter += 1
+
+    def choose_action(self, state):
+        if np.random.uniform() < self.epsilon:
+            actions_value = self.model.predict(np.expand_dims(state, axis=0))
+            action = np.argmax(actions_value)
+        else:
+            action = np.random.randint(0, len(self.actionsList))
+        
+        return action
+
+    def _get_data(self):
+        # sample batch memory from all memory
+        if self.memory_counter > self.memory_size:
+            sample_index = np.random.choice(self.memory_size, size=self.batch_size)
+        else:
+            sample_index = np.random.choice(self.memory_counter, size=self.batch_size)
+        batch_memory = self.memory[sample_index, :]
+
+        if len(batch_memory) > 0:
+            env_size = batch_memory[0][0].shape[0]
+            mem_size = len(batch_memory)
+
+            inputs = np.zeros((mem_size, env_size))
+            targets = np.zeros((mem_size, len(self.actionsList)))
+            i = 0
+            for state, action, reward, state_ in batch_memory:
+                inputs[i] = state
+                targets[i] = self.model.predict(np.expand_dims(state, axis=0))
+
+                sa = self.target_model.predict(np.expand_dims(state_, axis=0))
+                Q_sa = np.max(sa)
+
+                targets[i, action] = reward + self.gamma * Q_sa
+                i += 1
+            return inputs, targets
+        return None, None
+
+
+    def learn(self):
+        if self.learn_step_counter % self.replace_target_iter == 0:
+            self.update_target_model(self.tau)
+            print('\ntarget_params_replaced\n')
+        
+        inputs, targets = self._get_data()
+        historic = self.model.fit(inputs, targets, epochs=self.epochs, batch_size=self.batch_size, verbose=0)
+
+        
+        # increasing epsilon
+        self.epsilon = self.epsilon + self.epsilon_increment if self.epsilon < self.epsilon_max else self.epsilon_max
+
+        self.learn_step_counter += 1
 
 
     def plotCost(self):
